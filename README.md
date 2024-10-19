@@ -1,2 +1,6 @@
 # ml4finance_project
-Repository for the Course Project of MATH 629 FA24
+This is the repo for the course project of MATH629(ML for Finance II). 
++ Group members:
+	- Paul Zhang
+	- Shangze Wu
+	- Kaiwen Dong
