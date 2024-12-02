@@ -10,7 +10,6 @@ from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.decomposition import TruncatedSVD, PCA
 from langdetect import detect
 
-
 # nltk.download("stopwords")
 # nltk.download("punkt_tab")
 # nltk.download("vader_lexicon")
@@ -159,7 +158,8 @@ class Features:
         assert matA.shape == matB.shape
         return np.nan_to_num((np.sum(matA * matB, axis = 1) / (np.linalg.norm(matA, axis = 1) * np.linalg.norm(matB, axis = 1))), copy = False, nan = 0.0).reshape(-1, 1)
 
-    def word_length_diversity(self, text):
+    @staticmethod
+    def word_length_diversity(text):
         '''
         TODO 5.3 & 5.4
         '''
@@ -168,7 +168,8 @@ class Features:
             return [arr.max(), arr.min(), arr.mean(), len(set(row))/len(row)]
         return np.vstack(text.apply(get_length).tolist())
 
-    def vader_score(self, text):
+    @staticmethod
+    def vader_score(text):
         '''
         TODO 5.5
         '''
@@ -184,7 +185,8 @@ class Features:
         return np.argmax(np.abs((cum_var[-1] - cum_var[0]) * np.arange(1, cum_var.shape[0] + 1) - (cum_var.shape[0] - 1) * cum_var + cum_var.shape[0]*cum_var[0] - cum_var[-1])\
                 / np.sqrt((cum_var[-1] - cum_var[0])**2 + (cum_var.shape[0] - 1)**2)) + 1
 
-    def rescale(self, body_data, head_data, combined_data):
+    @staticmethod
+    def rescale(body_data, head_data, combined_data):
         body_scaler, head_scaler, combined_scaler = MinMaxScaler(), MinMaxScaler(), MinMaxScaler()
 
         body_scaler.fit(body_data)
@@ -193,20 +195,36 @@ class Features:
 
         return body_scaler, head_scaler, combined_scaler
 
-    def dim_reduction(self, body_data, head_data, combined_data, method: str, n_comp: int|str, feature_name: str, verbose = 1):
-        n_components = body_data.shape[1]
-        
+    @staticmethod
+    def fit_decomp(data, method, n_comp):
         if method == "svd":
-            body_decomp, head_decomp, combined_decomp = TruncatedSVD(n_components), TruncatedSVD(n_components), TruncatedSVD(n_components)
+            decomp_model = TruncatedSVD(n_comp)
         elif method == "pca":
-            body_decomp, head_decomp, combined_decomp = PCA(n_components), PCA(n_components), PCA(n_components)
+            decomp_model = PCA(n_comp)
+        else:
+            raise NotImplementedError("Unsupported method '%s'. Choose 'svd' or 'pca'." %(method))
+        decomp_model.fit(data)
+        return decomp_model
 
-        body_decomp.fit(body_data)
-        head_decomp.fit(head_data)
-        combined_decomp.fit(combined_data)
+    @classmethod
+    def dim_reduction(cls, body_data, head_data, combined_data, method: str, n_comp: int|str, feature_name: str, verbose = 1):
+        n_features = body_data.shape[1]
+        
+        # if method == "svd":
+        #     body_decomp, head_decomp, combined_decomp = TruncatedSVD(n_components), TruncatedSVD(n_components), TruncatedSVD(n_components)
+        # elif method == "pca":
+        #     body_decomp, head_decomp, combined_decomp = PCA(n_components), PCA(n_components), PCA(n_components)
+
+        # body_decomp.fit(body_data)
+        # head_decomp.fit(head_data)
+        # combined_decomp.fit(combined_data)
+
+        body_decomp = cls.fit_decomp(body_data, method, n_features)
+        head_decomp = cls.fit_decomp(head_data, method, n_features)
+        combined_decomp = cls.fit_decomp(combined_data, method, n_features)
 
         if n_comp == "auto":
-            n_comp_opt = [self.get_optimal_dim(body_decomp), self.get_optimal_dim(head_decomp), self.get_optimal_dim(combined_decomp)]
+            n_comp_opt = [cls.get_optimal_dim(body_decomp), cls.get_optimal_dim(head_decomp), cls.get_optimal_dim(combined_decomp)]
         else: 
             n_comp_opt = [n_comp, n_comp, n_comp]
 
