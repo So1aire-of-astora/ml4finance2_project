@@ -6,16 +6,22 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
 
-from data import get_loader
+from typing import Optional
+
+import sys
+import os
+sys.path.insert(0, os.path.abspath("."))
+
+from utils import get_loader, EarlyStopper
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class CNN(nn.Module):
-    def __init__(self, n_features, num_classes, conv_layers, fc_layers, dropout_prob=0.5):
+    def __init__(self, n_features, n_classes, conv_layers, fc_layers, dropout):
         super(CNN, self).__init__()
 
         conv_layers_list = []
-        in_channels = 1 
+        in_channels = 1
         current_length = n_features
 
         for out_channels, kernel_size, stride, padding in conv_layers:
@@ -26,7 +32,7 @@ class CNN(nn.Module):
             current_length = (current_length + 2 * padding - kernel_size) // stride + 1
             in_channels = out_channels
 
-        conv_layers_list.append(nn.MaxPool1d(kernel_size=2))
+        conv_layers_list.append(nn.MaxPool1d(kernel_size = 2))
         current_length //= 2 
         self.conv_layers = nn.Sequential(*conv_layers_list)
 
@@ -35,11 +41,10 @@ class CNN(nn.Module):
         for fc_size in fc_layers:
             fc_layers_list.append(nn.Linear(input_size, fc_size))
             fc_layers_list.append(nn.ReLU())
-            fc_layers_list.append(nn.Dropout(dropout_prob))
+            fc_layers_list.append(nn.Dropout(dropout))
             input_size = fc_size
 
-        # Output layer
-        fc_layers_list.append(nn.Linear(input_size, num_classes))
+        fc_layers_list.append(nn.Linear(input_size, n_classes))
         self.fc_layers = nn.Sequential(*fc_layers_list)
 
     def forward(self, x):
@@ -49,39 +54,50 @@ class CNN(nn.Module):
         x = self.fc_layers(x)
         return x
 
-def train(model, train_loader, optimizer, criterion, device):
-    model.train()
-    running_loss = 0.0
-    correct_predictions = 0
-    total_predictions = 0
+def train(model, train_loader, valid_loader, optimizer, criterion, epochs, device, stopper_args: Optional[dict] = None):
+    if stopper_args:
+        stopper = EarlyStopper(**stopper_args)
 
-    for inputs, labels in train_loader:
-        inputs, labels = inputs.to(device), labels.to(device)
+    num_batches = len(train_loader)
+    num_items = len(train_loader.dataset)
+    
+    for e in range(epochs):
+        model.train()
+        total_loss = 0.
+        total_correct = 0
 
-        optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
 
-        _, predicted = torch.max(outputs, 1)
-        correct_predictions += (predicted == labels).sum().item()
-        total_predictions += labels.size(0)
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
 
-        running_loss += loss.item()
+            _, predicted = torch.max(outputs, 1)
+            total_correct += (predicted == labels).sum().item()
+            total_loss += loss.item()
 
-    epoch_loss = running_loss / len(train_loader)
-    epoch_accuracy = correct_predictions / total_predictions
-    return epoch_loss, epoch_accuracy
+        train_loss = total_loss / num_batches
+        train_accuracy = total_correct / num_items
+        valid_loss, valid_accuracy, _ = test(model, valid_loader, criterion, device, verbose = 0)
+        if not (e+1) % 10:
+            print("Epoch %d/%d: Training Loss %.6f\tValidation Loss %.6f\tTraining Accuracy %.2f%%\tValidation Accuracy %.2f%%" %(e+1, epochs, train_loss, valid_loss, train_accuracy*100, valid_accuracy*100))
+        if stopper and stopper.early_stop(valid_loss):
+            print("[Early stopping]\nEpoch %d/%d: Training Loss %.6f\tValidation Loss %.6f\tTraining Accuracy %.2f%%\tValidation Accuracy %.2f%%" %(e+1, epochs, train_loss, valid_loss, train_accuracy*100, valid_accuracy*100))
+            break
 
-def test(model, test_loader, criterion, device):
+def test(model, test_loader, criterion, device, verbose):
     model.eval()
-    running_loss = 0.0
-    correct_predictions = 0
-    total_predictions = 0
+
+    num_batches = len(test_loader)
+    num_items = len(test_loader.dataset)
+    
+    total_loss = 0.
+    total_correct = 0
 
     all_preds = []
-    all_labels = []
 
     with torch.no_grad():
         for inputs, labels in test_loader:
@@ -90,19 +106,23 @@ def test(model, test_loader, criterion, device):
             outputs = model(inputs)
             
             loss = criterion(outputs, labels)
-            running_loss += loss.item()
+            total_loss += loss.item()
 
             _, predicted = torch.max(outputs, 1)
-            correct_predictions += (predicted == labels).sum().item()
-            total_predictions += labels.size(0)
+            total_correct += (predicted == labels).sum().item()
 
             all_preds.extend(predicted.cpu().numpy())
-            all_labels.extend(labels.cpu().numpy())
 
-    epoch_loss = running_loss / len(test_loader)
-    epoch_accuracy = correct_predictions / total_predictions
+    test_loss = total_loss / num_batches
+    test_accuracy = total_correct / num_items
+    if verbose:
+        print("Test Loss %.6f\tTest Accuracy %.2f%%" %(test_loss, test_accuracy*100))
+    return test_loss, test_accuracy, all_preds
 
-    return epoch_loss, epoch_accuracy, all_preds, all_labels
+def save_labels(preds: np.array, unlabeled_data_path: str):
+    unl_data = pd.read_csv(unlabeled_data_path)
+    unl_data["Stance"] = preds
+    unl_data.to_csv("./temp/preds_cnn.csv", index = False)
 
 def main():
 
@@ -112,33 +132,33 @@ def main():
     test_label_path = "./features/label_test.csv"
 
     batch_size = 32
+    valid_size = .2
 
-    train_loader, valid_loader, test_loader = get_loader(train_feature_path, train_label_path, test_feature_path, test_label_path, batch_size)
+    train_loader, valid_loader, test_loader, encoder = get_loader(train_feature_path, train_label_path, test_feature_path, test_label_path, batch_size, valid_size)
 
     n_features = train_loader.dataset[0][0].shape[0]
-
-    num_classes = 4 
+    n_classes = 4
 
     conv_config = [
         (16, 3, 1, 1), 
         (32, 3, 1, 1), 
     ]
     fc_config = [128, 64] 
-    dropout_prob = 0.5
+    dropout = 0.5
 
-    model = CNN(n_features, num_classes, conv_config, fc_config, dropout_prob).to(device)
+    model = CNN(n_features, n_classes, conv_config, fc_config, dropout).to(device)
 
     optimizer = Adam(model.parameters(), lr=0.001)
     criterion = nn.CrossEntropyLoss()
 
-    epochs = 10
-    for epoch in range(epochs):
-        train_loss, train_accuracy = train(model, train_loader, optimizer, criterion, device)
-        valid_loss, valid_accuracy, test_preds, test_labels = test(model, test_loader, criterion, device)
+    epochs = 100
 
-        print(f"Epoch {epoch+1}/{epochs}")
-        print(f"Train Loss: {train_loss:.4f}, Train Accuracy: {train_accuracy:.4f}")
-        print(f"Test Loss: {valid_loss:.4f}, Valid Accuracy: {valid_accuracy:.4f}")
+    train(model, train_loader, valid_loader, optimizer, criterion, epochs, device, stopper_args = {"threshold": 20, "epsilon": 1e-4})
+
+    test_loss, test_accuracy, pred = test(model, test_loader, criterion, device, verbose = 1)
+    pred_labels = encoder.inverse_transform(pred)
+
+    save_labels(pred_labels, "./fnc-1-master/test_stances_unlabeled.csv")
 
 if __name__ == "__main__":
     main()
