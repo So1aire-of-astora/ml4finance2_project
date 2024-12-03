@@ -1,4 +1,4 @@
 # ignore word2vec dataset
-./word2vec
-
+./word2vec/*
+./temp/*
 *.npy
