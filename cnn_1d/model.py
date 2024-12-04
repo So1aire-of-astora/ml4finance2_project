@@ -119,11 +119,6 @@ def test(model, test_loader, criterion, device, verbose):
         print("Test Loss %.6f\tTest Accuracy %.2f%%" %(test_loss, test_accuracy*100))
     return test_loss, test_accuracy, all_preds
 
-def save_labels(preds: np.array, unlabeled_data_path: str):
-    unl_data = pd.read_csv(unlabeled_data_path)
-    unl_data["Stance"] = preds
-    unl_data.to_csv("./temp/preds_cnn.csv", index = False)
-
 def main():
 
     train_feature_path = "./features/feature_train.npy"
@@ -158,7 +153,7 @@ def main():
     test_loss, test_accuracy, pred = test(model, test_loader, criterion, device, verbose = 1)
     pred_labels = encoder.inverse_transform(pred)
 
-    save_labels(pred_labels, "./fnc-1-master/test_stances_unlabeled.csv")
+    pd.DataFrame(pred_labels, columns = ["Stance"]).to_csv("./temp/preds_cnn.csv", index = False)
 
 if __name__ == "__main__":
     main()
