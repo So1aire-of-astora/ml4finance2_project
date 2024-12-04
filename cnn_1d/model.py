@@ -138,7 +138,7 @@ def main():
         (16, 3, 1, 1), 
         (32, 3, 1, 1), 
     ]
-    fc_config = [128, 64] 
+    fc_config = [128, 64]
     dropout = 0.5
 
     model = CNN(n_features, n_classes, conv_config, fc_config, dropout).to(device)
