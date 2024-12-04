@@ -1,4 +1,6 @@
 # ignore word2vec dataset
-./word2vec/*
-./temp/*
+word2vec/*
+temp/*
+.vscode/*
+__pycache__/
 *.npy
