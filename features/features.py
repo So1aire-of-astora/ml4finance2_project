@@ -8,7 +8,11 @@ import gensim.downloader
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.decomposition import TruncatedSVD, PCA
+import torch
+from transformers import AutoTokenizer, AutoModel
 from langdetect import detect
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # nltk.download("stopwords")
 # nltk.download("punkt_tab")
@@ -272,7 +276,21 @@ class Features:
         combined_data = self.combined_decomp_tfidf.transform(combined_data)[:, :self.n_comp_tfidf[2]]
 
         return body_data, head_data, combined_data
-    
+
+    def bert_embedding(self, data):
+        model_name = "bert-base-uncased"
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModel.from_pretrained(model_name).to(device)
+        def get_bert(text):
+            inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=512).to(device)
+            with torch.no_grad():
+                outputs = model(**inputs)
+
+            return outputs.last_hidden_state[:, 0, :].cpu().squeeze().numpy()
+        return np.vstack(data.apply(get_bert).tolist())
+
+
+
     def write(self, file_name, **arrays: np.array):
         # chunk_size = 100
         # chunk_idx = [(i * chunk_size, min((i + 1) * chunk_size, n_rows)) for i in range((n_rows + chunk_size - 1) // chunk_size)]
@@ -281,7 +299,7 @@ class Features:
         #         chunk = np.hstack([arr[start:end, :] for arr in arrays.values()])
         #         np.savetxt(f, chunk, delimiter = ',', mode = 'a', fmt = "%f")
 
-        np.save("./features/feature_{}.npy".format(file_name), np.hstack(list(arrays.values())))
+        np.save("./features/feature_aug_{}.npy".format(file_name), np.hstack(list(arrays.values())))
         
         if self.training:
             readme_content = []
@@ -296,12 +314,14 @@ class Features:
         
         self.data["Stance"].to_csv("./features/label_{}.csv".format(file_name))
 
-    def fit(self, body_path, stance_path, readme: bool = True):
+    def fit(self, body_path, stance_path):
         '''
         print the cols corresponding to each feature to readme
         '''
         self.merge(body_path, stance_path)
         jaccard = self.jaccard_sim()
+
+        body_bert = self.bert_embedding(self.data["Headline"])
 
         body_embed, head_embed, combined_embed = self.word2vec()
         embed_sim = self.cosine_sim(body_embed, head_embed)
@@ -321,12 +341,16 @@ class Features:
         head_sentiment = self.vader_score(self.data["Headline"])
         combined_sentiment = self.vader_score(self.data["articleBody"] + " " + self.data["Headline"])
 
-        
+        body_bert = self.bert_embedding(self.data["articleBody"])
+        head_bert = self.bert_embedding(self.data["Headline"])
+        combined_bert = self.bert_embedding(self.data["articleBody"] + " " + self.data["Headline"])
+        bert_sim = self.cosine_sim(body_bert, head_bert)
+
         self.write(file_name = "train" if self.training else "test",
-                   body_embedding = body_embed, body_tfidf = body_tfidf, body_wordcount = body_count, body_length_diversity = body_len_div, body_sentiment = body_sentiment, 
-                   head_embedding = head_embed, head_tfidf = head_tfidf, head_wordcount = head_count, head_length_diversity = head_len_div, head_sentiment = head_sentiment,
-                   combined_embedding = combined_embed, combined_tfidf = combined_tfidf, combined_wordcount = combined_count, combined_length_diversity = combined_len_div, 
-                   combined_sentiment = combined_sentiment, embed_similarity = embed_sim, tfidf_similarity = tfidf_sim, jaccard_similarity = jaccard)
+                   body_embedding = body_embed, body_tfidf = body_tfidf, body_wordcount = body_count, body_length_diversity = body_len_div, body_sentiment = body_sentiment, body_bert = body_bert,
+                   head_embedding = head_embed, head_tfidf = head_tfidf, head_wordcount = head_count, head_length_diversity = head_len_div, head_sentiment = head_sentiment, head_bert = head_bert,
+                   combined_embedding = combined_embed, combined_tfidf = combined_tfidf, combined_wordcount = combined_count, combined_length_diversity = combined_len_div, combined_sentiment = combined_sentiment, 
+                   combined_bert = combined_bert, embed_similarity = embed_sim, tfidf_similarity = tfidf_sim, jaccard_similarity = jaccard, bert_similarity = bert_sim)
 
 
 def main():
