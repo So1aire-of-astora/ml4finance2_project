@@ -41,9 +41,9 @@ class CNN(nn.Module):
         for fc_size in fc_layers:
             fc_layers_list.append(nn.Linear(input_size, fc_size))
             fc_layers_list.append(nn.ReLU())
+
             fc_layers_list.append(nn.Dropout(dropout))
             input_size = fc_size
-
         fc_layers_list.append(nn.Linear(input_size, n_classes))
         self.fc_layers = nn.Sequential(*fc_layers_list)
 
