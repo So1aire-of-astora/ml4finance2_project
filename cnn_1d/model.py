@@ -3,7 +3,6 @@ import pandas as pd
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.optim import Adam
 
 from typing import Optional
@@ -13,6 +12,7 @@ import os
 sys.path.insert(0, os.path.abspath("."))
 
 from utils import get_loader, EarlyStopper
+from loss import FocalLoss
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -26,7 +26,7 @@ class CNN(nn.Module):
 
         for out_channels, kernel_size, stride, padding in conv_layers:
             conv_layers_list.append(
-                nn.Conv1d(in_channels, out_channels, kernel_size, stride=stride, padding=padding)
+                nn.Conv1d(in_channels, out_channels, kernel_size, stride, padding)
             )
             conv_layers_list.append(nn.ReLU())
             current_length = (current_length + 2 * padding - kernel_size) // stride + 1
@@ -119,14 +119,19 @@ def test(model, test_loader, criterion, device, verbose):
         print("Test Loss %.6f\tTest Accuracy %.2f%%" %(test_loss, test_accuracy*100))
     return test_loss, test_accuracy, all_preds
 
+def class_weights(label_path):
+    labels = pd.read_csv(label_path)["Stance"]
+    _, counts = np.unique(labels, return_counts = True)
+    return labels.shape[0] / counts
+
 def main():
 
-    train_feature_path = "./features/feature_train.npy"
-    test_feature_path = "./features/feature_test.npy"
+    train_feature_path = "./features/feature_aug_train.npy"
+    test_feature_path = "./features/feature_aug_test.npy"
     train_label_path = "./features/label_train.csv"
     test_label_path = "./features/label_test.csv"
 
-    batch_size = 32
+    batch_size = 128
     valid_size = .2
 
     train_loader, valid_loader, test_loader, encoder = get_loader(train_feature_path, train_label_path, test_feature_path, test_label_path, batch_size, valid_size)
@@ -135,25 +140,29 @@ def main():
     n_classes = 4
 
     conv_config = [
-        (16, 3, 1, 1), 
+        (32, 3, 1, 1), 
         (32, 3, 1, 1), 
     ]
-    fc_config = [128, 64]
-    dropout = 0.5
+    # fc_config = [128, 64]
+    fc_config = [1024, 512, 256]
+    dropout = 0.2
+    lr = .0001
+    epochs = 200
 
     model = CNN(n_features, n_classes, conv_config, fc_config, dropout).to(device)
-
-    optimizer = Adam(model.parameters(), lr=0.001)
+    optimizer = Adam(model.parameters(), lr)
+    
+    weights = torch.tensor(class_weights(train_label_path), dtype = torch.float32)
     criterion = nn.CrossEntropyLoss()
+    # criterion = nn.CrossEntropyLoss(weight = weights.to(device))
+    # criterion = FocalLoss(alpha = weights.to(device))
 
-    epochs = 100
-
-    train(model, train_loader, valid_loader, optimizer, criterion, epochs, device, stopper_args = {"threshold": 20, "epsilon": 1e-4})
+    train(model, train_loader, valid_loader, optimizer, criterion, epochs, device, stopper_args = {"threshold": 10, "epsilon": 1e-4})
 
     test_loss, test_accuracy, pred = test(model, test_loader, criterion, device, verbose = 1)
     pred_labels = encoder.inverse_transform(pred)
 
-    pd.DataFrame(pred_labels, columns = ["Stance"]).to_csv("./temp/preds_cnn.csv", index = False)
+    pd.DataFrame(pred_labels, columns = ["Stance"]).to_csv("./temp/cnn_aug_ce.csv", index = False)
 
 if __name__ == "__main__":
     main()
