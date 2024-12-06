@@ -89,9 +89,13 @@ class WrongUsageException(Exception):
         super().__init__(self.message)
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
+    if len(sys.argv) not in [3, 4]:
         raise WrongUsageException
 
     scorer = CoolScorer(sys.argv[1], sys.argv[2])
 
-    print(scorer)
+    if len(sys.argv) == 3:
+        print(scorer)
+    else:
+        with open(sys.argv[-1], 'w') as f:
+            print(scorer, file = f)
