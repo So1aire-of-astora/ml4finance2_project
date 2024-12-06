@@ -49,7 +49,7 @@ class CoolScorer:
         self.score, self.cm = self.score_model(y_true, y_pred)
         self.accuracy = np.diag(self.cm).sum() / y_true.shape[0]
         self.null_score, self.best_score = self.score_default(y_true)
-        self.relative_score = (self.score - self.null_score) / (self.best_score - self.null_score) * 100
+        self.relative_score = self.score / self.best_score * 100
 
     @classmethod
     def score_model(cls, y_true, y_pred):
