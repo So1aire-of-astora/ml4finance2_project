@@ -1,0 +1,8 @@
+Confusion Matrix:
+                  Predicted agree  Predicted disagree  Predicted discuss  Predicted unrelated
+Actual agree                  970                  33                658                  242
+Actual disagree               235                  54                271                  137
+Actual discuss                543                  36               3245                  640
+Actual unrelated              432                 104               1047                16766
+Max Score: 16238.50	Null Score: 4587.25	Model Score: 8904.50	Relative Score: 54.84
+Model Accuracy:0.827726

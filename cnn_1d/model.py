@@ -145,7 +145,7 @@ def main():
     ]
     # fc_config = [128, 64]
     fc_config = [1024, 512, 256]
-    dropout = 0.2
+    dropout = 0.1
     lr = .0001
     epochs = 200
 
@@ -153,8 +153,8 @@ def main():
     optimizer = Adam(model.parameters(), lr)
     
     weights = torch.tensor(class_weights(train_label_path), dtype = torch.float32)
-    criterion = nn.CrossEntropyLoss()
-    # criterion = nn.CrossEntropyLoss(weight = weights.to(device))
+    # criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(weight = weights.to(device))
     # criterion = FocalLoss(alpha = weights.to(device))
 
     train(model, train_loader, valid_loader, optimizer, criterion, epochs, device, stopper_args = {"threshold": 10, "epsilon": 1e-4})
@@ -162,7 +162,7 @@ def main():
     test_loss, test_accuracy, pred = test(model, test_loader, criterion, device, verbose = 1)
     pred_labels = encoder.inverse_transform(pred)
 
-    pd.DataFrame(pred_labels, columns = ["Stance"]).to_csv("./temp/cnn_aug_ce.csv", index = False)
+    pd.DataFrame(pred_labels, columns = ["Stance"]).to_csv("./temp/cnn_aug_ce_weighted.csv", index = False)
 
 if __name__ == "__main__":
     main()
