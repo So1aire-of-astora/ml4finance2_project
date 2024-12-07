@@ -1,4 +1,4 @@
-# ml4finance2_project
+# Fake News Detection
 This is the repo for the course project of MATH629(ML for Finance II), mainly focused on Fake News Detection.
 + Group members:
 	- Paul Zhang
