@@ -6,6 +6,7 @@ from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import gensim
 import gensim.downloader
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.decomposition import TruncatedSVD, PCA
 import torch
@@ -56,8 +57,8 @@ class Features:
             6.1 Methods to be considered: SVD, PCA
         '''
         self.n_gram = kwargs.get("n_gram", 1)
-        self.stopword = kwargs.get("stopword", False)
         self.wordvec = gensim.downloader.load(embeddings)
+        self.__dict__.update(kwargs)
 
     def train(self):
         self.training = True
@@ -145,13 +146,14 @@ class Features:
         return self.count_vectorizer.transform(self.data["articleBody"]).toarray(), self.count_vectorizer.transform(self.data["Headline"]).toarray(),\
                 self.count_vectorizer.transform(self.data["articleBody"] + " " + self.data["Headline"]).toarray()
 
-    def jaccard_sim(self):
+    @staticmethod
+    def jaccard_sim(data):
         '''
         TODO 4.1
         '''
         def compute_union_intersect(row):
             return len(set(row['Headline_token']) & set(row['articleBody_token'])) / len(set(row['Headline_token']) | set(row['articleBody_token']))
-        return self.data.apply(compute_union_intersect, axis = 1).to_numpy().reshape(-1, 1)
+        return data.apply(compute_union_intersect, axis = 1).to_numpy().reshape(-1, 1)
     
     @staticmethod
     def cosine_sim(matA, matB):
@@ -289,8 +291,6 @@ class Features:
             return outputs.last_hidden_state[:, 0, :].cpu().squeeze().numpy()
         return np.vstack(data.apply(get_bert).tolist())
 
-
-
     def write(self, file_name, **arrays: np.array):
         # chunk_size = 100
         # chunk_idx = [(i * chunk_size, min((i + 1) * chunk_size, n_rows)) for i in range((n_rows + chunk_size - 1) // chunk_size)]
@@ -314,12 +314,12 @@ class Features:
         
         self.data["Stance"].to_csv("./features/label_{}.csv".format(file_name))
 
-    def fit(self, body_path, stance_path):
+    def _fit(self, filename):
         '''
         print the cols corresponding to each feature to readme
         '''
-        self.merge(body_path, stance_path)
-        jaccard = self.jaccard_sim()
+
+        jaccard = self.jaccard_sim(self.data)
 
         body_bert = self.bert_embedding(self.data["Headline"])
 
@@ -346,19 +346,36 @@ class Features:
         combined_bert = self.bert_embedding(self.data["articleBody"] + " " + self.data["Headline"])
         bert_sim = self.cosine_sim(body_bert, head_bert)
 
-        self.write(file_name = "train" if self.training else "test",
+        self.write(file_name = filename,
                    body_embedding = body_embed, body_tfidf = body_tfidf, body_wordcount = body_count, body_length_diversity = body_len_div, body_sentiment = body_sentiment, body_bert = body_bert,
                    head_embedding = head_embed, head_tfidf = head_tfidf, head_wordcount = head_count, head_length_diversity = head_len_div, head_sentiment = head_sentiment, head_bert = head_bert,
                    combined_embedding = combined_embed, combined_tfidf = combined_tfidf, combined_wordcount = combined_count, combined_length_diversity = combined_len_div, combined_sentiment = combined_sentiment, 
                    combined_bert = combined_bert, embed_similarity = embed_sim, tfidf_similarity = tfidf_sim, jaccard_similarity = jaccard, bert_similarity = bert_sim)
 
+    def fit(self, body_path, stance_path, mode):
+        self.merge(body_path, stance_path)
+        if mode == "train":
+            train_data, valid_data = train_test_split(self.data, test_size = self.validation_size, random_state = 42, shuffle = True)
+            self.train()
+            self.data = train_data
+            self._fit(filename = "train")
+        
+            self.test()
+            self.data = valid_data
+            self._fit(filename = "validation")
+
+        elif mode == "test":
+            self.test()
+            self._fit(filename = "test")
+        else:
+            raise ValueError("The mode should be either 'train' or 'test'.")
 
 def main():
-    feature_set = Features(embeddings = "word2vec-google-news-300", stopword = True)
-    feature_set.train()
-    feature_set.fit(body_path = "./fnc-1-master/train_bodies.csv", stance_path = "./fnc-1-master/train_stances.csv")
-    feature_set.test()
-    feature_set.fit(body_path = "./fnc-1-master/competition_test_bodies.csv", stance_path = "./fnc-1-master/competition_test_stances.csv")
+    feature_set = Features(embeddings = "word2vec-google-news-300", stopword = True, validation_size = .2)
+
+    feature_set.fit(body_path = "./fnc-1-master/train_bodies.csv", stance_path = "./fnc-1-master/train_stances.csv", mode = "train")
+
+    feature_set.fit(body_path = "./fnc-1-master/competition_test_bodies.csv", stance_path = "./fnc-1-master/competition_test_stances.csv", mode = "test")
 
 if __name__ == "__main__":
     main()

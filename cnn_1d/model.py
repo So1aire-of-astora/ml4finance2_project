@@ -126,15 +126,17 @@ def class_weights(label_path):
 
 def main():
 
-    train_feature_path = "./features/feature_aug_train.npy"
-    test_feature_path = "./features/feature_aug_test.npy"
-    train_label_path = "./features/label_train.csv"
-    test_label_path = "./features/label_test.csv"
+    train_feature = "./features/feature_aug_train.npy"
+    valid_feature = "./features/feature_aug_validation.npy"
+    test_feature = "./features/feature_aug_test.npy"
+    train_label = "./features/label_train.csv"
+    valid_label = "./features/label_validation.csv"
+    test_label = "./features/label_test.csv"
 
     batch_size = 128
     valid_size = .2
 
-    train_loader, valid_loader, test_loader, encoder = get_loader(train_feature_path, train_label_path, test_feature_path, test_label_path, batch_size, valid_size)
+    train_loader, valid_loader, test_loader, encoder = get_loader(train_feature, train_label, valid_feature, valid_label, test_feature, test_label, batch_size)
 
     n_features = train_loader.dataset[0][0].shape[0]
     n_classes = 4
@@ -152,7 +154,7 @@ def main():
     model = CNN(n_features, n_classes, conv_config, fc_config, dropout).to(device)
     optimizer = Adam(model.parameters(), lr)
     
-    weights = torch.tensor(class_weights(train_label_path), dtype = torch.float32)
+    weights = torch.tensor(class_weights(train_label), dtype = torch.float32)
     # criterion = nn.CrossEntropyLoss()
     criterion = nn.CrossEntropyLoss(weight = weights.to(device))
     # criterion = FocalLoss(alpha = weights.to(device))
