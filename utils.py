@@ -20,10 +20,10 @@ class NewsDataset(Dataset):
         label = torch.tensor(self.encoded_labels[idx], dtype=torch.long)
         return feature, label
 
-def get_loader(train_feature_path, train_label_path, test_feature_path, test_label_path, batch_size, valid_size, col = "Stance"):
-    train_valid_data = NewsDataset(train_feature_path, train_label_path, col)
-    test_data = NewsDataset(test_feature_path, test_label_path, col)
-    train_data, valid_data = random_split(train_valid_data, [1 - valid_size, valid_size])
+def get_loader(train_feature, train_label, valid_feature, valid_label, test_feature, test_label, batch_size):
+    train_data = NewsDataset(train_feature, train_label, "Stance")
+    valid_data = NewsDataset(valid_feature, valid_label, "Stance")
+    test_data = NewsDataset(test_feature, test_label, "Stance")
     return DataLoader(train_data, batch_size = batch_size, shuffle = True), DataLoader(valid_data, batch_size = batch_size, shuffle = True), DataLoader(test_data, batch_size=batch_size, shuffle = False), \
             test_data.label_encoder
 
