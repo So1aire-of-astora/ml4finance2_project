@@ -7,14 +7,13 @@ import random
 """
 ----------User Manual for the Scorer----------
 This is an improved, and of course, cooler version of the original scorer for the fake news challange. 
-Developed by Paul Zhang.
+Developed by Paul Zhang. 
 
-We only require the labels for the submission. I mean, who tf cares about the headline and the body ID
-when it comes to scoring? At least we don't. In addition, we had to get rid of some not-so-cool news samples that 
-are NOT EVEN IN ENGLISH, and as a result, the original scorer just wouldn't work.
+During the project, we had to get rid of some not-so-cool news samples that are NOT EVEN IN ENGLISH, 
+and as a result, the original scorer just wouldn't work. Well, here comes the new scorer :)
 
 We have also planned for some customizations on the scoring criterion, so that our models always get the highest 
-possible scores. But since this is apparently immoral, we decided to keep the original criterion:
+possible scores. But since this is apparently immoral, we have kept the original criterion:
     +0.25 for each correct unrelated
     +0.25 for each correct related (label is any of agree, disagree, discuss)
     +0.75 for each correct agree, disagree, discuss
@@ -26,16 +25,13 @@ The scorer will provide three scores: MAX, NULL, and TEST
 
 Another thing we choose to keep is the usage:
 
-    $ python scorer.py test_labels pred_labels
+    $ python scorer.py test_labels pred_labels output_path
     
     params:
         test_labels - CSV file with TRUE stance labels
         pred_labels - CSV file with PREDICTED stance labels
+        output_path - Optional, specifies the path of the output file if you prefer not to print to the console.
 
-No worries. If you treat the usage message like a suggestion, the scorer will return an error that practically 
-SCREAMS in your face. 
-
-Good luck and have fun.
 ----------End of User Manual----------
 """
 
@@ -75,22 +71,24 @@ class CoolScorer:
         return "Confusion Matrix:\n{}\nMax Score: {:.2f}\tNull Score: {:.2f}\tModel Score: {:.2f}\tRelative Score: {:.2f}\nModel Accuracy:{:.6f}".format(self.cm, 
             self.best_score, self.null_score, self.score, self.relative_score, self.accuracy)
 
-class WrongUsageException(Exception):
-    def __init__(self):
-        self.messages = [
-            "WHY HAVEN'T YOU READ THE DOCS? WHY?",
-            "TOLD YOU YOU ARE GONNA GET YELLED AT!",
-            "THAT'S NOT HOW YOU USE THE SCORER! MY SCORER!",
-            "NICE TRY!",
-            "REEEEEAD THE DOOOOOOOCS!",
-            "I DON'T THINK SO!"
-        ]
-        self.message = random.choice(self.messages)
-        super().__init__(self.message)
+# class WrongUsageException(Exception):
+#     def __init__(self):
+#         self.messages = [
+#             "WHY HAVEN'T YOU READ THE DOCS? WHY?",
+#             "TOLD YOU YOU ARE GONNA GET YELLED AT!",
+#             "THAT'S NOT HOW YOU USE THE SCORER! MY SCORER!",
+#             "NICE TRY!",
+#             "REEEEEAD THE DOOOOOOOCS!",
+#             "I DON'T THINK SO!"
+#         ]
+#         self.message = random.choice(self.messages)
+#         super().__init__(self.message)
 
 if __name__ == '__main__':
     if len(sys.argv) not in [3, 4]:
-        raise WrongUsageException
+        # raise WrongUsageException
+        print("Wrong usage. Please check the instructions.")
+        sys.exit(1)
 
     scorer = CoolScorer(sys.argv[1], sys.argv[2])
 
