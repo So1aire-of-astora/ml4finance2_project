@@ -82,11 +82,12 @@ def train(model, train_loader, valid_loader, optimizer, criterion, epochs, devic
         train_loss = total_loss / num_batches
         train_accuracy = total_correct / num_items
         valid_loss, valid_accuracy, _ = test(model, valid_loader, criterion, device, verbose = 0)
-        if not (e+1) % 10:
-            print("Epoch %d/%d: Training Loss %.6f\tValidation Loss %.6f\tTraining Accuracy %.2f%%\tValidation Accuracy %.2f%%" %(e+1, epochs, train_loss, valid_loss, train_accuracy*100, valid_accuracy*100))
+
         if stopper and stopper.early_stop(valid_loss):
             print("[Early stopping]\nEpoch %d/%d: Training Loss %.6f\tValidation Loss %.6f\tTraining Accuracy %.2f%%\tValidation Accuracy %.2f%%" %(e+1, epochs, train_loss, valid_loss, train_accuracy*100, valid_accuracy*100))
             break
+        if not (e+1) % 5:
+            print("Epoch %d/%d: Training Loss %.6f\tValidation Loss %.6f\tTraining Accuracy %.2f%%\tValidation Accuracy %.2f%%" %(e+1, epochs, train_loss, valid_loss, train_accuracy*100, valid_accuracy*100))
 
 def test(model, test_loader, criterion, device, verbose):
     model.eval()
@@ -134,7 +135,6 @@ def main():
     test_label = "./features/label_test.csv"
 
     batch_size = 128
-    valid_size = .2
 
     train_loader, valid_loader, test_loader, encoder = get_loader(train_feature, train_label, valid_feature, valid_label, test_feature, test_label, batch_size)
 
@@ -148,13 +148,14 @@ def main():
     # fc_config = [128, 64]
     fc_config = [1024, 512, 256]
     dropout = 0.1
-    lr = .0001
+    lr = .00001
     epochs = 200
 
     model = CNN(n_features, n_classes, conv_config, fc_config, dropout).to(device)
     optimizer = Adam(model.parameters(), lr)
     
     weights = torch.tensor(class_weights(train_label), dtype = torch.float32)
+    weights = torch.tensor([20, 120, 7, 1.5], dtype = torch.float32)
     # criterion = nn.CrossEntropyLoss()
     criterion = nn.CrossEntropyLoss(weight = weights.to(device))
     # criterion = FocalLoss(alpha = weights.to(device))
